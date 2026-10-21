@@ -28,6 +28,7 @@ DVRIP 二进制握手流程的组包、字节序、哈希公式，均已在 8 �
 ├── .github/workflows/
 │   ├── ci.yml                  # 每次 push/PR：vet + test + 四平台交叉编译冒烟
 │   └── release.yml             # 打 v* tag：构建四平台产物并发布到 Release
+├── .gitattributes
 └── .gitignore
 ```
 
