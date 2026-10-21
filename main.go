@@ -11,7 +11,9 @@
 //	# 离线自测(不碰任何真实目标)
 //	go test . -v
 //
-//	# 真机: 经典 DVRIP 二进制流程
+//	# 真机: 经典 DVRIP 二进制流程(位置参数 / 短选项 / 长选项均可)
+//	go run . 192.168.1.108 admin admin123
+//	go run . -t 192.168.1.108:37777 -u admin -p admin123
 //	go run . -target 192.168.1.108:37777 -user admin -pass admin123
 //
 // Pure Go implementation of the Dahua DVRIP login handshake (TCP 37777).
@@ -105,6 +107,27 @@ var version = "dev"
 
 // ---------- 命令行入口 ----------
 
+// usage 打印用法。短选项与位置参数是长选项的便捷写法, 三者优先级为:
+// 长选项 > 短选项 > 位置参数 > 环境变量。
+func usage() {
+	out := flag.CommandLine.Output()
+	fmt.Fprint(out, `dvripkit - 大华 DVRIP 登录校验器 (纯 Go)
+
+用法:
+  dvripkit <target> [user] [pass]
+  dvripkit -t <target> -u <user> -p <pass>
+  dvripkit -target <target> -user <user> -pass <pass>
+
+示例:
+  dvripkit 192.168.1.108 admin admin123
+  dvripkit -t 192.168.1.108:37777 -u admin -p admin123
+  dvripkit -v
+
+选项:
+`)
+	flag.PrintDefaults()
+}
+
 func main() {
 	var (
 		target  = flag.String("target", os.Getenv("DAHUA_DVRIP_TARGET"), "目标地址 host 或 host:port")
@@ -112,34 +135,64 @@ func main() {
 		pass    = flag.String("pass", os.Getenv("DAHUA_DVRIP_PASS"), "密码")
 		timeout = flag.Int("timeout", 5, "单次连接超时(秒)")
 		showVer = flag.Bool("version", false, "打印版本号后退出")
+
+		// 短选项。与长选项分开注册, 避免默认值互相覆盖。
+		shortTarget = flag.String("t", "", "同 -target")
+		shortUser   = flag.String("u", "", "同 -user")
+		shortPass   = flag.String("p", "", "同 -pass")
+		shortVer    = flag.Bool("v", false, "同 -version")
 	)
+	flag.Usage = usage
 	flag.Parse()
 
-	if *showVer {
+	// 位置参数: dvripkit <target> [user] [pass]。
+	// flag 包在遇到第一个非选项参数时停止解析, 因此位置参数必须写在选项之后。
+	args := flag.Args()
+	set := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
+
+	pick := func(long, short string, longVal *string, shortVal string, pos int) string {
+		switch {
+		case set[long]:
+			return *longVal
+		case set[short]:
+			return shortVal
+		case pos < len(args):
+			return args[pos]
+		default:
+			return *longVal // 环境变量默认值或空串
+		}
+	}
+
+	targetVal := pick("target", "t", target, *shortTarget, 0)
+	userVal := pick("user", "u", user, *shortUser, 1)
+	passVal := pick("pass", "p", pass, *shortPass, 2)
+
+	if *showVer || *shortVer {
 		fmt.Printf("dvripkit %s\n", version)
 		return
 	}
 
-	if strings.TrimSpace(*target) == "" {
-		fmt.Fprintln(os.Stderr, "缺少 -target(或环境变量 DAHUA_DVRIP_TARGET)")
-		flag.Usage()
+	if strings.TrimSpace(targetVal) == "" {
+		fmt.Fprintln(os.Stderr, "缺少目标地址: dvripkit <target> [user] [pass] 或 -t/-target")
+		usage()
 		os.Exit(2)
 	}
-	if strings.TrimSpace(*user) == "" {
-		fmt.Fprintln(os.Stderr, "缺少 -user(或环境变量 DAHUA_DVRIP_USER)")
-		flag.Usage()
+	if strings.TrimSpace(userVal) == "" {
+		fmt.Fprintln(os.Stderr, "缺少用户名: 或 -u/-user")
+		usage()
 		os.Exit(2)
 	}
 
-	host, port := splitTarget(*target)
+	host, port := splitTarget(targetVal)
 	tmo := time.Duration(*timeout) * time.Second
 
-	fmt.Printf("==> DVRIP 二进制流程 %s:%d user=%s\n", host, port, *user)
+	fmt.Printf("==> DVRIP 二进制流程 %s:%d user=%s\n", host, port, userVal)
 	r := Scan(Target{
 		Ip:       host,
 		Port:     uint(port),
-		Username: *user,
-		Password: *pass,
+		Username: userVal,
+		Password: passVal,
 		Timeout:  tmo,
 	})
 	switch {

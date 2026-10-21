@@ -48,24 +48,40 @@ go build -trimpath -ldflags "-s -w -X main.version=v0.1.0" -o dvripkit .
 
 ## 用法
 
+三种写法等价，按习惯挑一种：
+
 ```bash
+# 位置参数（最短）
+./dvripkit 192.168.1.108 admin admin123
+
+# 短选项
+./dvripkit -t 192.168.1.108:37777 -u admin -p admin123
+
+# 长选项
 ./dvripkit -target 192.168.1.108:37777 -user admin -pass admin123
+```
+
+位置参数顺序是 `<target> [user] [pass]`，端口缺省 37777。注意位置参数要写在选项之后——Go 的 `flag` 遇到第一个非选项参数就停止解析。
+
+```bash
+./dvripkit 192.168.1.108 admin admin123 -timeout 10
 ```
 
 查看版本：
 
 ```bash
-./dvripkit -version
+./dvripkit -v        # 或 -version
 ```
 
-参数也可通过环境变量提供（便于脚本化）：
+参数取值优先级：**长选项 > 短选项 > 位置参数 > 环境变量**。
 
-| 参数 | 环境变量 | 说明 |
-| --- | --- | --- |
-| `-target` | `DAHUA_DVRIP_TARGET` | 目标 `host` 或 `host:port`，端口缺省 37777 |
-| `-user` | `DAHUA_DVRIP_USER` | 用户名 |
-| `-pass` | `DAHUA_DVRIP_PASS` | 密码 |
-| `-timeout` | — | 单次连接超时（秒），缺省 5 |
+| 长选项 | 短选项 | 环境变量 | 说明 |
+| --- | --- | --- | --- |
+| `-target` | `-t` | `DAHUA_DVRIP_TARGET` | 目标 `host` 或 `host:port`，端口缺省 37777 |
+| `-user` | `-u` | `DAHUA_DVRIP_USER` | 用户名 |
+| `-pass` | `-p` | `DAHUA_DVRIP_PASS` | 密码 |
+| `-timeout` | — | — | 单次连接超时（秒），缺省 5 |
+| `-version` | `-v` | — | 打印版本号后退出 |
 
 输出示例：
 
