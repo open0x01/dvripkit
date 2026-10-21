@@ -41,6 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.TAG }}
           fetch-depth: 0
 
       - uses: actions/setup-go@v5
@@ -96,10 +97,8 @@ jobs:
         with:
           tag_name: ${{ env.TAG }}
           name: ${{ env.TAG }}
-          target_commitish: ${{ github.sha }}
           draft: false
           prerelease: ${{ contains(env.TAG, '-') }}
-          generate_release_notes: true
           files: |
             dist/*.zip
             dist/*.tar.gz
@@ -142,9 +141,7 @@ jobs:
             ### 说明
 
             - 仅实现 DVRIP 二进制登录流程（TCP 37777），不包含 JSON（`F6`）接口
-            - 三态结果：认证成功 / 认证失败 / 账号锁定（附剩余锁定秒数）/ 设备不可达
+            - 结果分类：认证成功 / 认证失败 / 账号锁定（附剩余锁定秒数）/ 设备不可达
             - 二进制以 `CGO_ENABLED=0` 静态构建，Linux 版无需额外运行时依赖
 
             > **仅限授权使用。** 请只在你自己拥有或已获得书面授权的设备/网络上使用。
-
-            **完整变更：** https://github.com/${{ github.repository }}/compare/${{ env.TAG }}...HEAD
