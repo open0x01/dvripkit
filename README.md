@@ -32,19 +32,6 @@ DVRIP 二进制握手流程的组包、字节序、哈希公式，均已在 8 �
 └── .gitignore
 ```
 
-## 下载
-
-预编译二进制在 [Releases](https://github.com/open0x01/dvripkit/releases/latest) 页面，覆盖：
-
-| 平台 | 架构 | 文件 |
-| --- | --- | --- |
-| Windows | amd64 | `dvripkit_<version>_windows_amd64.zip` |
-| Windows | arm64 | `dvripkit_<version>_windows_arm64.zip` |
-| Linux | amd64 | `dvripkit_<version>_linux_amd64.tar.gz` |
-| Linux | arm64 | `dvripkit_<version>_linux_arm64.tar.gz` |
-
-每个压缩包内含可执行文件与 `README.md`；同批资产附带 `checksums.txt`（SHA-256），可用 `sha256sum -c checksums.txt --ignore-missing` 校验。
-
 ## 构建
 
 需要 Go 1.25 或更高版本。
@@ -53,7 +40,7 @@ DVRIP 二进制握手流程的组包、字节序、哈希公式，均已在 8 �
 go build -o dvripkit .
 ```
 
-带版本号构建（与 Release 产物一致）：
+带版本号构建：
 
 ```bash
 go build -trimpath -ldflags "-s -w -X main.version=v0.1.0" -o dvripkit .
@@ -170,17 +157,6 @@ body = user + "&&" + H1 + H2
 - 未适配新固件的「先建会话（`/RPC2_Login` 或 A0 05 带 `sessionID`）再登录」流程；目标设备若只接受该流程，会表现为认证失败
 - 一次 `Scan` 只校验一组凭据，不负责字典调度
 - 未处理设备主动推送的保活/心跳报文
-
-## 发布
-
-打 tag 即触发发布（workflow 会自动构建四平台产物并挂到 Release）：
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-产物命名遵循 `dvripkit_<version>_<os>_<arch>`，`version` 去掉 `v` 前缀。发布前 CI 会先跑一遍全部测试；测试不过则不会产出 Release。
 
 ## 许可
 
