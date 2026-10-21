@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要发布的 tag（例如 v0.1.0），该 tag 必须已存在"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  BINARY: dvripkit
+
+jobs:
+  test:
+    name: Test before release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  release:
+    name: Build & Publish
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archives
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p dist
+
+          for target in windows/amd64 windows/arm64 linux/amd64 linux/arm64; do
+            GOOS="${target%/*}"
+            GOARCH="${target#*/}"
+            name="${BINARY}_${VERSION}_${GOOS}_${GOARCH}"
+
+            # Windows 用 .exe 后缀，其余平台无后缀
+            exe="${BINARY}"
+            if [ "$GOOS" = "windows" ]; then exe="${BINARY}.exe"; fi
+
+            GOOS="$GOOS" GOARCH="$GOARCH" go build \
+              -trimpath \
+              -ldflags "-s -w -X main.version=${TAG}" \
+              -o "dist/${name}/${exe}" .
+
+            cp README.md "dist/${name}/"
+
+            if [ "$GOOS" = "windows" ]; then
+              (cd dist && zip -q -r "${name}.zip" "${name}")
+            else
+              tar -C dist -czf "dist/${name}.tar.gz" "${name}"
+            fi
+            rm -rf "dist/${name}"
+          done
+
+          ls -lh dist
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          sha256sum *.zip *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: ${{ contains(env.TAG, '-') }}
+          generate_release_notes: true
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/checksums.txt
+          body: |
+            ## dvripkit ${{ env.TAG }}
+
+            纯 Go 实现的大华 DVRIP 登录校验器。不加载 NetSDK，不依赖任何 `.so`/`.dll`，报文与摘要算法全部在 Go 内完成。
+
+            ### 下载
+
+            | 平台 | 架构 | 文件 |
+            | --- | --- | --- |
+            | Windows | amd64 | `dvripkit_${{ env.VERSION }}_windows_amd64.zip` |
+            | Windows | arm64 | `dvripkit_${{ env.VERSION }}_windows_arm64.zip` |
+            | Linux | amd64 | `dvripkit_${{ env.VERSION }}_linux_amd64.tar.gz` |
+            | Linux | arm64 | `dvripkit_${{ env.VERSION }}_linux_arm64.tar.gz` |
+
+            每个压缩包内含可执行文件与 `README.md`。全部资产的 SHA-256 见 `checksums.txt`：
+
+            ```bash
+            sha256sum -c checksums.txt --ignore-missing
+            ```
+
+            ### 用法
+
+            ```bash
+            # Windows
+            dvripkit.exe -target 192.168.1.108:37777 -user admin -pass admin123
+
+            # Linux
+            ./dvripkit -target 192.168.1.108:37777 -user admin -pass admin123
+
+            # 版本
+            ./dvripkit -version
+            ```
+
+            参数也可用环境变量提供：`DAHUA_DVRIP_TARGET` / `DAHUA_DVRIP_USER` / `DAHUA_DVRIP_PASS`。
+
+            ### 说明
+
+            - 仅实现 DVRIP 二进制登录流程（TCP 37777），不包含 JSON（`F6`）接口
+            - 三态结果：认证成功 / 认证失败 / 账号锁定（附剩余锁定秒数）/ 设备不可达
+            - 二进制以 `CGO_ENABLED=0` 静态构建，Linux 版无需额外运行时依赖
+
+            > **仅限授权使用。** 请只在你自己拥有或已获得书面授权的设备/网络上使用。
+
+            **完整变更：** https://github.com/${{ github.repository }}/compare/${{ env.TAG }}...HEAD
